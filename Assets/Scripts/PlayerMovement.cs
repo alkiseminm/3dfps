@@ -5,18 +5,14 @@ public class PlayerMovement : MonoBehaviour
     public float speed = 12f; // Movement speed
     public float jumpHeight = 3f; // Jump height
     public float gravity = -9.8f; // Gravity force
+    public float bodySlamSpeed = -50f; // Speed of the body slam
     public Transform groundCheck; // Ground check position (empty GameObject below the character)
     public LayerMask groundMask; // Layer mask to define what is considered "ground"
 
     private CharacterController controller;
     private Vector3 velocity;
     private bool isGrounded;
-
-    // Snappy movement values (acceleration/deceleration)
-    public float groundAcceleration = 20f; // How fast you accelerate while moving
-    public float groundDeceleration = 50f; // How fast you decelerate when not moving
-
-    private Vector3 currentSpeed; // Current velocity for snappier movement
+    private bool isBodySlamming = false; // Tracks whether the player is body-slamming
 
     void Start()
     {
@@ -28,48 +24,38 @@ public class PlayerMovement : MonoBehaviour
         // Check if the player is grounded using Physics.CheckSphere
         isGrounded = Physics.CheckSphere(groundCheck.position, 0.3f, groundMask);
 
-        // Visualize the ground check in the Scene view for debugging
-        Debug.DrawRay(groundCheck.position, Vector3.down * 0.3f, Color.red);
-
-        // If the player is grounded and falling, reset downward velocity
+        // If grounded and falling, reset downward velocity
         if (isGrounded && velocity.y < 0)
         {
             velocity.y = -2f; // Prevent floating when grounded
+            isBodySlamming = false; // Reset body slam state when grounded
         }
 
-        // Get player movement input
-        float x = Input.GetAxis("Horizontal"); // A/D or Left/Right arrow keys
-        float z = Input.GetAxis("Vertical"); // W/S or Up/Down arrow keys
-
-        // Calculate target movement direction based on player’s orientation
-        Vector3 targetDirection = transform.right * x + transform.forward * z;
-
-        // Check if the player is moving
-        if (targetDirection.magnitude > 0.1f)
+        // Horizontal movement
+        if (!isBodySlamming) // Prevent horizontal movement during body slam
         {
-            // Accelerate instantly towards the target direction
-            currentSpeed = targetDirection * speed;
+            float x = Input.GetAxis("Horizontal");
+            float z = Input.GetAxis("Vertical");
+            Vector3 move = transform.right * x + transform.forward * z;
+            controller.Move(move * speed * Time.deltaTime);
         }
-        else
+
+        // Jumping
+        if (Input.GetButtonDown("Jump") && isGrounded && !isBodySlamming)
         {
-            // Apply deceleration instantly when not moving
-            currentSpeed = Vector3.zero;
+            velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
         }
 
-        // Apply movement using CharacterController
-        controller.Move(currentSpeed * Time.deltaTime);
-
-        // Jumping logic
-        if (Input.GetButtonDown("Jump") && isGrounded)
+        // Body Slam
+        if (Input.GetKeyDown(KeyCode.LeftControl) && !isGrounded) // Initiate body slam in mid-air
         {
-            Debug.Log("Jumping!"); // Debugging the jump action
-            velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity); // Calculate jump velocity
+            isBodySlamming = true;
+            velocity = Vector3.zero; // Stop all horizontal movement immediately
+            velocity.y = bodySlamSpeed; // Apply fast downward speed
         }
 
-        // Apply gravity to the player
+        // Apply gravity (and body slam velocity, if active)
         velocity.y += gravity * Time.deltaTime;
-
-        // Apply the velocity (including gravity) to the character's movement
         controller.Move(velocity * Time.deltaTime);
     }
 }
